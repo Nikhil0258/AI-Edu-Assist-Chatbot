@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #E3F2FD; /* Light blue background */
+            color: #333;
+        }
+
+        h1 {
+            color: #0277BD; /* Dark blue color for headers */
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        ul li {
+            background-color: #B3E5FC; /* Light blue background for list items */
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+
+        a {
+            display: inline-block;
+            background-color: #4CAF50; /* Green background for buttons */
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+
+        a:hover {
+            background-color: #388E3C;
+        }
+    </style>
+</head>
+<body>
+    <h1>Quiz Results</h1>
+    <!--<p>Your Score: {{ score }} out of {{ total_questions }} ({{ score_percentage|floatformat:2 }}%)</p>-->
+    <ul>
+        {% for result in results %}
+        <li>
+            Question: {{ result.question }}<br>
+            Your Answer: {{ result.user_answer }}<br>
+            Correct Answer: {{ result.correct_answer }}<br>
+            Result: {{ result.result }}
+        </li>
+        {% endfor %}
+    </ul>
+    <a href="http://127.0.0.1:8000/">Take another quiz</a>
+</body>
+</html>

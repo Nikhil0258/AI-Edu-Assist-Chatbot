@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edu Assist</title>
+    <style>
+        /* General Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(to right, #4facfe, #00f2fe);
+            color: #333;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .main-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ffffff;
+            text-align: center;
+            margin: 10px 0 10px 0; /* Reduced margin at top */
+        }
+        .container {
+            display: flex;
+            flex: 1;
+        }
+        .sidebar {
+            width: 200px;
+            background-color: #ffffff;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .sidebar button {
+            background-color: #00c9a7;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            padding: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .sidebar button:hover {
+            background-color: #00a986;
+        }
+        .content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+        .section-title {
+            font-size: 20px;
+            color: #ffffff;
+            margin-bottom: 10px; /* Reduced margin-top */
+            text-align: center;
+        }
+        .chatbot-container {
+            width: 80vw; /* Set to 80% of window width */
+            max-width: 1000px; /* Set a max width */
+            background-color: #ffffff;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            height: 60vh; /* Adjust height */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .textbox-container {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .textbox {
+            width: 100%;
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: none;
+            height: 80px;
+        }
+
+        /* User input textarea */
+        textarea[name="user_textbox"] {
+            height: 80px;
+        }
+
+        /* AI response textarea */
+        textarea:not([name="user_textbox"]) {
+            height: 200px;
+            background-color: #f9f9f9;
+        }
+
+        .textbox:focus {
+            border-color: #00c9a7;
+            outline: none;
+            box-shadow: 0 0 5px rgba(0, 201, 167, 0.5);
+        }
+
+        /* Center the button */
+        button {
+            background-color: #00c9a7;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            padding: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 20px; /* Spacing below buttons */
+            align-self: center; /* Center the button */
+        }
+
+        .quizzes-container button {
+            margin: 10px 0; /* Spacing between buttons */
+        }
+        .alarm-container p {
+            margin-bottom: 20px; /* Spacing below Current Time */
+        }
+        .alarm-container input,
+        .alarm-container button {
+            margin-top: 10px; /* Spacing between Set Alarm input and button */
+        }
+        .hidden {
+            display: none;
+        }
+
+        /* Chat History Styling */
+        .chat-history {
+            margin-top: 20px; /* Added margin-top for space between history and interaction */
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .chat-history .entry {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        .chat-history .user {
+            font-weight: bold;
+            color: #0066cc;
+            margin-bottom: 5px;
+        }
+        .chat-history .ai {
+            color: #333;
+            font-style: italic;
+        }
+        .chat-history .entry:nth-child(odd) {
+            background-color: #e6f7ff; /* Light blue for user messages */
+        }
+        .chat-history .entry:nth-child(even) {
+            background-color: #f2f2f2; /* Light gray for AI messages */
+        }
+    </style>
+    <script>
+        function showScreen(screen) {
+            // Hide all sections
+            document.querySelectorAll('.section').forEach(section => section.classList.add('hidden'));
+
+            // Show selected section
+            document.getElementById(screen).classList.remove('hidden');
+        }
+
+        function updateCurrentTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleTimeString();
+        }
+
+        setInterval(updateCurrentTime, 1000); // Update time every second
+
+        function setAlarm() {
+            const alarmTime = document.getElementById('alarm-time').value;
+            const alarmDate = new Date();
+            const [hours, minutes] = alarmTime.split(':').map(Number);
+            alarmDate.setHours(hours);
+            alarmDate.setMinutes(minutes);
+            alarmDate.setSeconds(0);
+
+            const now = new Date();
+            let delay = alarmDate.getTime() - now.getTime();
+            if (delay < 0) {
+                alert('Alarm time must be in the future!');
+                return; // Prevent setting an alarm in the past
+            }
+
+            setTimeout(() => {
+                alert('Alarm ringing!');
+                // Play sound or another notification method
+            }, delay);
+
+            document.getElementById('status').innerText = `Alarm set for ${alarmTime}`;
+        }
+    </script>
+</head>
+<body>
+    <!-- Main Title -->
+    <div class="main-title">Edu Assist: AI-Powered Personalized Learning Companion</div>
+
+    <!-- Layout -->
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <button onclick="showScreen('chatbot')">Chatbot</button>
+            <button onclick="showScreen('quizzes')">Quizzes</button>
+            <button onclick="showScreen('alarm')">Alarm</button>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <!-- Chatbot Screen -->
+            <div id="chatbot" class="section">
+                <h1 class="section-title">Chatbot</h1>
+                <div class="chat-history">
+                    {% for entry in chat_history %}
+                    <div class="entry">
+                        <div class="user">User: {{ entry.user }}</div>
+                        <div class="ai">AI: {{ entry.ai }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="chatbot-container">
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="textbox-container">
+                            <!-- User Input -->
+                            <textarea name="user_textbox" class="textbox" placeholder="Type your query here...">{{ user_input }}</textarea>
+                            <!-- AI Response -->
+                            <textarea readonly class="textbox" placeholder="AI's response will appear here...">{{ ai_response }}</textarea>
+                        </div>
+                        <button type="submit">Ask AI</button>
+                    </form>
+                </div>
+            </div>
+
+           <!-- Quizzes Screen -->
+<div id="quizzes" class="section hidden">
+    <h1 class="section-title">Quizzes</h1>
+    <div class="quiz-container">
+        <form method="GET" action="{% url 'quizzes' %}" class="quiz-form">
+            <div class="input-container">
+                <!-- Text input for Choose a Topic -->
+                <label for="topic">Choose a Topic:</label>
+                <input type="text" name="topic" id="topic" placeholder="Enter topic here" required>
+                <button type="button" onclick="searchTopic()">Search</button>
+            </div>
+
+            <div class="input-container">
+                <!-- Dropdown for Choose Difficulty -->
+                <label for="difficulty">Choose Difficulty:</label>
+                <select name="difficulty" id="difficulty" required>
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                </select>
+            </div>
+
+            <button type="submit">Start Quiz</button>
+        </form>
+        <div class="quiz-list">
+            {% if quizzes %}
+                {% for quiz in quizzes %}
+                    <div class="quiz-item">
+                        <p class="quiz-question">{{ quiz.question }}</p>
+                        <p><input type="radio" name="q{{ forloop.counter }}" value="1"> {{ quiz.option1 }}</p>
+                        <p><input type="radio" name="q{{ forloop.counter }}" value="2"> {{ quiz.option2 }}</p>
+                        <p><input type="radio" name="q{{ forloop.counter }}" value="3"> {{ quiz.option3 }}</p>
+                        <p><input type="radio" name="q{{ forloop.counter }}" value="4"> {{ quiz.option4 }}</p>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p>No quizzes available for the selected topic and difficulty.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<div class="content">
+    <!-- Alarm Screen -->
+    <div id="alarm" class="section hidden">
+        <h1 class="section-title">Alarm</h1>
+        <div class="alarm-container">
+            <p>Current Time: <span id="current-time"></span></p>
+            <label for="alarm-time">Set Alarm Time:</label>
+            <input type="time" id="alarm-time">
+            <button onclick="setAlarm()">Set Alarm</button>
+            <p id="status"></p>
+        </div>
+    </div>
+</div>
+        </div>
+    </div>
+</body>
+</html>
