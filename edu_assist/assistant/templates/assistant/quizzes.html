@@ -1,107 +1,51 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quizzes</title>
-    <style>
-        /* Base reset for consistent styling */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+{% extends "assistant/base.html" %}
+{% block title %}Quizzes • AI Edu Assist{% endblock %}
+{% block content %}
+<div class="card p-3 p-md-4">
+  <form method="get" action="/quizzes/" class="row g-2 align-items-end">
+    <div class="col-md-6">
+      <label class="form-label">Topic</label>
+      <input name="topic" class="form-control" value="{{ selected_topic }}" placeholder="e.g., Python">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Difficulty</label>
+      <select name="difficulty" class="form-select">
+        <option value="" {% if not selected_difficulty %}selected{% endif %}>Any</option>
+        <option value="Easy" {% if difficulty_easy_selected %}selected{% endif %}>Easy</option>
+        <option value="Medium" {% if difficulty_medium_selected %}selected{% endif %}>Medium</option>
+        <option value="Hard" {% if difficulty_hard_selected %}selected{% endif %}>Hard</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-grid">
+      <button class="btn btn-primary" type="submit">Filter</button>
+    </div>
+  </form>
 
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f4f4f9;
-            color: #333;
-            line-height: 1.6;
-            padding: 20px;
-        }
+  {% if message %}
+  <div class="alert alert-info mt-3">{{ message }}</div>
+  {% endif %}
 
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 20px;
-        }
+  {% if quizzes %}
+  <form method="post" action="/quizzes/" class="mt-3">
+    {% csrf_token %}
+    <ol class="list-group list-group-numbered">
+      {% for q in quizzes %}
+      <li class="list-group-item">
+        <p class="fw-semibold mb-2">{{ q.question }}</p>
 
-        .quiz-container {
-            width: 80%;
-            margin: 20px auto;
-            padding: 20px;
-            background: white;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            border-radius: 10px;
-        }
-
-        .quiz-item {
-            background-color: #e9ecef;
-            margin-bottom: 20px;
-            padding: 20px;
-            border-radius: 8px;
-        }
-
-        .quiz-item h3 {
-            color: #007bff;
-            margin-bottom: 15px;
-        }
-
-        .option-container {
-            margin-top: 5px; /* Adds space between options */
-        }
-
-        button {
-            display: block;
-            width: 100%;
-            background-color: #007bff;
-            color: white;
-            padding: 10px;
-            font-size: 16px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 20px;
-        }
-
-        button:hover {
-            background-color: #0056b3;
-        }
-
-        @media (max-width: 768px) {
-            .quiz-container {
-                width: 90%;
-            }
-        }
-    </style>
-</head>
-<body>
-    <h1>Quizzes for {{ selected_topic }} ({{ selected_difficulty }})</h1>
-    <form action="{% url 'quiz_submit_url' %}" method="post">
-        {% csrf_token %}
-        {% for quiz in quizzes %}
-        <div class="quiz-container">
-            <h3>{{ quiz.question }}</h3>
-            <input type="hidden" name="quiz_id_{{ forloop.counter }}" value="{{ quiz.id }}">
-            <div class="option-container">
-                <input type="radio" name="answer_{{ quiz.id }}" value="1" id="option1_{{ quiz.id }}">
-                <label for="option1_{{ quiz.id }}">{{ quiz.option1 }}</label>
-            </div>
-            <div class="option-container">
-                <input type="radio" name="answer_{{ quiz.id }}" value="2" id="option2_{{ quiz.id }}">
-                <label for="option2_{{ quiz.id }}">{{ quiz.option2 }}</label>
-            </div>
-            <div class="option-container">
-                <input type="radio" name="answer_{{ quiz.id }}" value="3" id="option3_{{ quiz.id }}">
-                <label for="option3_{{ quiz.id }}">{{ quiz.option3 }}</label>
-            </div>
-            <div class="option-container">
-                <input type="radio" name="answer_{{ quiz.id }}" value="4" id="option4_{{ quiz.id }}">
-                <label for="option4_{{ quiz.id }}">{{ quiz.option4 }}</label>
-            </div>
+        {% for opt in q.options %}
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="answer_{{ q.id }}" value="{{ forloop.counter }}" required>
+          <label class="form-check-label">{{ opt }}</label>
         </div>
         {% endfor %}
-        <button type="submit">Submit</button>
-    </form>
-</body>
-</html>
+      </li>
+      {% endfor %}
+    </ol>
+    <div class="mt-3 d-grid d-md-flex justify-content-md-end">
+      <button class="btn btn-success btn-lg" type="submit">Submit</button>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

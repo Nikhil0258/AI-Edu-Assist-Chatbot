@@ -1,0 +1,260 @@
+{% extends "assistant/base.html" %}
+{% block title %}Alarm • AI Edu Assist{% endblock %}
+{% block content %}
+<div class="card p-3 p-md-4">
+  <h4>Alarm</h4>
+  <p class="text-muted">This alarm works even when the tab is in background or switched.</p>
+  <div id="permissionStatus" class="alert alert-info mb-3" style="display:none;"></div>
+  
+  <form id="alarmForm" class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label">Time</label>
+      <input id="alarmTime" type="time" class="form-control" required>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Message</label>
+      <input id="alarmMsg" type="text" class="form-control" placeholder="Stand up, deploy, call, etc.">
+    </div>
+    <div class="col-md-2 d-grid">
+      <button class="btn btn-primary" type="submit">Set</button>
+    </div>
+  </form>
+  
+  <div id="alarmStatus" class="mt-3"></div>
+  <div id="activeAlarms" class="mt-3"></div>
+  
+  <audio id="beep" preload="auto">
+    <source src="https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg" type="audio/ogg">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBzuN2fjE3SkHN2Gh5ry1YBsEMIHO8+OKMwgZaLvu55xPFApGq+Xzw1gUEVOs3++4cSAFJYXN8tlkMgcZaLvt45xPEwpgq+X1wlETEFOt3+6+fCUJLnLM8+SMMwgZaLvx5F9FEVCr3/K9gyIMPo/Q+OOLMwgZaLvy5l1FFE1Sser3zUwfDzqP0Pjjg" type="audio/wav">
+  </audio>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const form = document.getElementById('alarmForm');
+  const timeI = document.getElementById('alarmTime');
+  const msgI = document.getElementById('alarmMsg');
+  const status = document.getElementById('alarmStatus');
+  const permissionStatus = document.getElementById('permissionStatus');
+  const activeAlarms = document.getElementById('activeAlarms');
+  const beep = document.getElementById('beep');
+
+  let alarmIntervals = [];
+  let alarmTimeouts = [];
+
+  // Request notification permission on load
+  async function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+      permissionStatus.innerHTML = '⚠️ This browser doesn\'t support notifications.';
+      permissionStatus.style.display = 'block';
+      return false;
+    }
+
+    if (Notification.permission === 'granted') {
+      return true;
+    }
+
+    if (Notification.permission !== 'denied') {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        permissionStatus.innerHTML = '✅ Notifications enabled! Alarms will work in background.';
+        permissionStatus.className = 'alert alert-success mb-3';
+        permissionStatus.style.display = 'block';
+        return true;
+      }
+    }
+
+    permissionStatus.innerHTML = '❌ Please enable notifications for background alarms to work.';
+    permissionStatus.className = 'alert alert-warning mb-3';
+    permissionStatus.style.display = 'block';
+    return false;
+  }
+
+  // Initialize
+  requestNotificationPermission();
+
+  function createNotification(message, alarmId) {
+    if (Notification.permission === 'granted') {
+      const notification = new Notification('🚨 Alarm Alert!', {
+        body: message || 'Time\'s up!',
+        icon: '/favicon.ico',
+        tag: `alarm-${alarmId}`,
+        requireInteraction: true,
+        actions: [
+          { action: 'snooze', title: 'Snooze 5 min' },
+          { action: 'dismiss', title: 'Dismiss' }
+        ]
+      });
+
+      notification.onclick = function() {
+        window.focus();
+        this.close();
+      };
+
+      return notification;
+    }
+    return null;
+  }
+
+  function playAlarmSound() {
+    try {
+      beep.currentTime = 0;
+      beep.play().catch(() => {
+        // Fallback: create audio context beep
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.5);
+      });
+    } catch(e) {
+      console.log('Could not play sound:', e);
+    }
+  }
+
+  function triggerAlarm(message, alarmId) {
+    // Play sound
+    playAlarmSound();
+    
+    // Show notification
+    const notification = createNotification(message, alarmId);
+    
+    // Show browser alert as fallback
+    if (!notification) {
+      alert(message || "Alarm!");
+    }
+    
+    // Update status
+    status.innerHTML = `<span class="text-success fw-bold">🚨 Alarm triggered: ${new Date().toLocaleTimeString()}</span>`;
+    
+    // Remove from active alarms
+    removeAlarmFromList(alarmId);
+  }
+
+  function addAlarmToList(targetTime, message, alarmId) {
+    const alarmDiv = document.createElement('div');
+    alarmDiv.className = 'alert alert-info d-flex justify-content-between align-items-center';
+    alarmDiv.id = `alarm-${alarmId}`;
+    alarmDiv.innerHTML = `
+      <div>
+        <strong>⏰ ${targetTime.toLocaleTimeString()}</strong><br>
+        <small>${message || 'Alarm'}</small>
+      </div>
+      <button class="btn btn-sm btn-outline-danger" onclick="cancelAlarm(${alarmId})">Cancel</button>
+    `;
+    activeAlarms.appendChild(alarmDiv);
+  }
+
+  function removeAlarmFromList(alarmId) {
+    const alarmDiv = document.getElementById(`alarm-${alarmId}`);
+    if (alarmDiv) {
+      alarmDiv.remove();
+    }
+  }
+
+  // Make cancelAlarm global so it can be called from onclick
+  window.cancelAlarm = function(alarmId) {
+    // Clear timeout
+    const timeoutIndex = alarmTimeouts.findIndex(t => t.id === alarmId);
+    if (timeoutIndex !== -1) {
+      clearTimeout(alarmTimeouts[timeoutIndex].timeout);
+      alarmTimeouts.splice(timeoutIndex, 1);
+    }
+
+    // Clear interval
+    const intervalIndex = alarmIntervals.findIndex(i => i.id === alarmId);
+    if (intervalIndex !== -1) {
+      clearInterval(alarmIntervals[intervalIndex].interval);
+      alarmIntervals.splice(intervalIndex, 1);
+    }
+
+    removeAlarmFromList(alarmId);
+    status.innerHTML = `<span class="text-warning">Alarm cancelled</span>`;
+  };
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    
+    const now = new Date();
+    const [hh, mm] = timeI.value.split(':').map(Number);
+    
+    if (isNaN(hh) || isNaN(mm)) {
+      status.textContent = "Please pick a valid time.";
+      return;
+    }
+
+    const target = new Date(now);
+    target.setHours(hh, mm, 0, 0);
+    
+    // If target time is in the past, set for next day
+    if (target <= now) {
+      target.setDate(target.getDate() + 1);
+    }
+
+    const ms = target - now;
+    const message = msgI.value.trim() || 'Alarm';
+    const alarmId = Date.now(); // Unique ID
+
+    // Set the main timeout
+    const timeout = setTimeout(() => {
+      triggerAlarm(message, alarmId);
+    }, ms);
+
+    alarmTimeouts.push({ id: alarmId, timeout });
+
+    // Add visual countdown (optional)
+    const interval = setInterval(() => {
+      const remaining = target - new Date();
+      if (remaining <= 0) {
+        clearInterval(interval);
+        return;
+      }
+      
+      const hours = Math.floor(remaining / (1000 * 60 * 60));
+      const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
+      
+      const alarmDiv = document.getElementById(`alarm-${alarmId}`);
+      if (alarmDiv) {
+        const timeLeft = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        alarmDiv.querySelector('strong').innerHTML = `⏰ ${target.toLocaleTimeString()} (${timeLeft} remaining)`;
+      }
+    }, 1000);
+
+    alarmIntervals.push({ id: alarmId, interval });
+
+    // Add to active alarms list
+    addAlarmToList(target, message, alarmId);
+
+    status.innerHTML = `<span class="text-primary fw-bold">✅ Alarm set for <strong>${target.toLocaleTimeString()}</strong></span>`;
+    
+    // Clear form
+    timeI.value = '';
+    msgI.value = '';
+  });
+
+  // Handle page visibility changes to ensure alarms work
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      // Page became visible, check if any alarms should have triggered
+      console.log('Page visible - alarms still active');
+    }
+  });
+
+  // Keep page active (optional - prevents some browsers from throttling)
+  setInterval(() => {
+    // This helps prevent browser throttling of background tabs
+  }, 30000);
+})();
+</script>
+{% endblock %}

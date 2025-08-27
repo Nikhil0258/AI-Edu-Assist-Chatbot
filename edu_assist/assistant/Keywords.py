@@ -1,32 +1,6 @@
-import os
-import json
-import re
-from django.db import models, transaction
-
-# Engineering-only gate
-from .filters import contains_engineering_keywords
-
-# OpenAI SDK (>= 1.0)
-from openai import OpenAI
-
-
-def get_openai_client():
-    """Create client lazily (reads OPENAI_API_KEY from env / .env)."""
-    key = os.getenv("OPENAI_API_KEY")
-    if not key:
-        try:
-            from dotenv import load_dotenv
-            load_dotenv()
-            key = os.getenv("OPENAI_API_KEY")
-        except Exception:
-            pass
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY is not set.")
-    return OpenAI(api_key=key)
-
-
-# ---- Your engineering keywords (kept inline, as you had) ----
-engineering_keywords = {kw.lower() for kw in [
+# assistant/keywords.py
+# Raw phrases you provided. Keep as-is; we normalize at runtime.
+RAW_ENGINEERING_TERMS = [
     "Computer Science & Engineering", "Programming Basics", "Programming Languages",
     "C/C++", "Basic Syntax", "Control Structures", "Functions", "Arrays & Pointers",
     "Classes & Objects", "Memory Management", "Python", "Data Types", "Control Flow",
@@ -92,139 +66,18 @@ engineering_keywords = {kw.lower() for kw in [
     "Biomaterials Basics", "Testing Methods", "Compatibility", "Common Engineering Skills",
     "Basic Computer Skills", "Office Tools", "Word Processing", "Spreadsheets", "Presentations",
     "Project Management", "Technical Software", "CAD Basics", "Simulation Tools",
-    "Workshop Safety", "Personal Protection", "Equipment Safety", "Emergency Procedures"
-]}
+    "Workshop Safety", "Personal Protection", "Equipment Safety", "Emergency Procedures", "Algorithms",
+]
 
-# Use the first token as a compact choice label (as you had)
-unique_topics = sorted({kw.split(" ")[0] for kw in engineering_keywords})
+# Optionally ignore ultra-generic phrases that cause false positives:
+_EXCLUDE_EXACT = {
+    "types", "tests", "applications", "properties",
+    "core subjects", "important skills", "basic tools & concepts",
+}
 
-
-def _normalize_difficulty(d: str) -> str:
-    """Map any casing to the display choice."""
-    m = {"easy": "Easy", "medium": "Medium", "hard": "Hard"}
-    return m.get((d or "Medium").strip().lower(), "Medium")
-
-
-class Quiz(models.Model):
-    """Model to represent quizzes."""
-    topic = models.CharField(max_length=100, choices=[(topic, topic) for topic in unique_topics])
-    difficulty = models.CharField(max_length=10, choices=[("Easy", "Easy"), ("Medium", "Medium"), ("Hard", "Hard")])
-    question = models.TextField()
-    option1 = models.CharField(max_length=200)
-    option2 = models.CharField(max_length=200)
-    option3 = models.CharField(max_length=200)
-    option4 = models.CharField(max_length=200)
-    correct_option = models.IntegerField()
-
-    def __str__(self):
-        return f"{self.topic} ({self.difficulty}): {self.question[:50]}"
-
-    # ----- Helpers for templates/results -----
-    @property
-    def options(self):
-        return [self.option1, self.option2, self.option3, self.option4]
-
-    def get_option_display(self, idx: int) -> str:
-        return self.options[idx - 1]
-
-    def get_correct_answer_display(self) -> str:
-        return self.get_option_display(self.correct_option)
-
-    # ----- Quiz generation -----
-    @classmethod
-    def generate_quiz(cls, *, topic: str, difficulty: str = "Medium", num_questions: int = 5) -> int:
-        """
-        Calls OpenAI (new SDK) to generate MCQs as strict JSON, parses,
-        and creates Quiz rows. Returns the number created.
-        """
-        # Engineering-only gate (defense in depth)
-        if not contains_engineering_keywords(topic or ""):
-            raise ValueError("non_engineering_topic")
-
-        client = get_openai_client()
-
-        diff_display = _normalize_difficulty(difficulty)
-
-        system = (
-            "You are a helpful quiz generator. "
-            "Return ONLY valid JSON. No extra text."
-        )
-        user = (
-            f"Create {num_questions} multiple-choice questions on '{topic}' "
-            f"at {diff_display} difficulty.\n\n"
-            "Return STRICT JSON of the form:\n"
-            "{\n"
-            '  "items": [\n'
-            "    {\n"
-            '      "question": "text",\n'
-            '      "options": ["A", "B", "C", "D"],\n'
-            '      "correct_option": 1\n'
-            "    }\n"
-            "  ]\n"
-            "}\n"
-            "Rules:\n"
-            "- options must be exactly 4 strings\n"
-            "- correct_option is an integer 1-4\n"
-            "- No explanations, no markdown, JUST JSON"
-        )
-
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=0.7,
-            timeout=60,
-        )
-        text = resp.choices[0].message.content or ""
-
-        # Extract JSON (if wrapped in ```json … ```)
-        match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-        payload = text[match.start():match.end()] if match else text
-
-        try:
-            data = json.loads(payload)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"OpenAI did not return valid JSON. Raw text: {text[:400]}...") from e
-
-        items = data.get("items") or []
-        if not isinstance(items, list):
-            raise ValueError("JSON must contain an 'items' array.")
-
-        created = 0
-        with transaction.atomic():
-            for it in items:
-                q = (it.get("question") or "").strip()
-                opts = it.get("options") or []
-                try:
-                    corr = int(it.get("correct_option"))
-                except Exception:
-                    corr = 0
-
-                if not q or not isinstance(opts, list) or len(opts) != 4 or corr not in {1, 2, 3, 4}:
-                    # Skip malformed rows
-                    continue
-
-                cls.objects.create(
-                    topic=topic,
-                    difficulty=diff_display,     # store canonical casing matching choices
-                    question=q,
-                    option1=opts[0],
-                    option2=opts[1],
-                    option3=opts[2],
-                    option4=opts[3],
-                    correct_option=corr,
-                )
-                created += 1
-
-        return created
-
-
-class ChatHistory(models.Model):
-    user_input = models.TextField()
-    ai_response = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.timestamp}: {self.user_input}"
+# Final normalized list used by the matcher
+ENGINEERING_TERMS = [
+    " ".join(term.lower().split())
+    for term in RAW_ENGINEERING_TERMS
+    if term and term.strip() and term.lower() not in _EXCLUDE_EXACT
+]

@@ -1,10 +1,25 @@
-.DS_Store
-node_modules/
-venv/
-*.log
-
-.env__pycache__/
-*.pyc
+# Python
+__pycache__/
+*.py[cod]
 *.pyo
+*.pyd
+*.so
+
+# Virtualenv
+.venv/
+venv/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Django
+db.sqlite3
+media/
+staticfiles/
+
+# Env / secrets
 .env
 .env.*
